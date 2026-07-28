@@ -1,58 +1,32 @@
-name: Build Unsigned IPA for Bengali-English Translator
+name: Build Unsigned IPA
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # ম্যানুয়ালি ট্রিগার
   push:
     branches: [ main ]
 
 jobs:
   build:
-    runs-on: macos-14
-
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
       - name: Create project structure
-        run: mkdir -p BengaliTranslator/Sources
-
-      - name: Write xcodegen project spec (Compatible with Xcode 15)
         run: |
-          cat << 'EOF' > project.yml
-          name: BengaliTranslator
-          options:
-            bundleIdPrefix: com.translator
-            xcodeVersion: "15.0"
-            objectVersion: 56
-          targets:
-            BengaliTranslator:
-              type: application
-              platform: iOS
-              deploymentTarget: "16.0"
-              sources:
-                - BengaliTranslator/Sources
-              settings:
-                base:
-                  INFOPLIST_FILE: BengaliTranslator/Sources/Info.plist
-                  CODE_SIGN_IDENTITY: ""
-                  CODE_SIGNING_REQUIRED: "NO"
-                  CODE_SIGNING_ALLOWED: "NO"
-                  PRODUCT_BUNDLE_IDENTIFIER: com.translator.bengali
-                  GENERATE_INFOPLIST_FILE: "YES"
-                  SWIFT_VERSION: "5.0"
-                  TARGETED_DEVICE_FAMILY: "1,2"
-          EOF
+          mkdir -p BanglaTranslator/BanglaTranslator
+          mkdir -p BanglaTranslator/BanglaTranslator.xcodeproj
 
-      - name: Write Source Files
+      - name: Create Swift files
         run: |
-          cat << 'EOF' > BengaliTranslator/Sources/BengaliTranslatorApp.swift
+          cat <<'EOF' > BanglaTranslator/BanglaTranslator/BanglaTranslatorApp.swift
           import SwiftUI
 
           @main
-          struct BengaliTranslatorApp: App {
+          struct BanglaTranslatorApp: App {
               var body: some Scene {
                   WindowGroup {
                       ContentView()
@@ -61,235 +35,510 @@ jobs:
           }
           EOF
 
-          cat << 'EOF' > BengaliTranslator/Sources/AvroPhonetic.swift
+          cat <<'EOF' > BanglaTranslator/BanglaTranslator/AvroParser.swift
           import Foundation
 
-          class AvroPhonetic {
-              private let mapping: [String: String] = [
-                  "a":"া", "aa":"আ", "i":"ি", "ii":"ী",
-                  "u":"ু", "uu":"ূ", "r":"র", "rr":"ড়",
-                  "e":"ে", "oi":"ৈ", "o":"ো", "ou":"ৌ",
-                  "k":"ক", "kh":"খ", "g":"গ", "gh":"ঘ", "ng":"ঙ",
-                  "c":"চ", "ch":"ছ", "j":"জ", "jh":"ঝ", "nya":"ঞ",
-                  "t":"ট", "th":"ঠ", "d":"ড", "dh":"ঢ", "n":"ন",
-                  "p":"প", "ph":"ফ", "b":"ব", "bh":"ভ", "m":"ম",
-                  "y":"য", "r":"র", "l":"ল", "sh":"শ", "ss":"ষ",
-                  "s":"স", "h":"হ", "z":"জ", "":"্",
-                  "0":"০","1":"১","2":"২","3":"৩","4":"৪",
-                  "5":"৫","6":"৬","7":"৭","8":"৮","9":"৯"
-              ]
-              
-              func convertToBengali(_ input: String) -> String {
-                  let text = input.lowercased()
-                  var bengali = ""
-                  var i = text.startIndex
-                  while i < text.endIndex {
+          struct AvroParser {
+              // সরলীকৃত অভ্র ফোনেটিক রুল সেট (সাধারণ ক্যারেক্টার কভার করে)
+              private static let rules: [(String, String)] = {
+                  // দীর্ঘ প্যাটার্ন আগে
+                  let raw: [(String, String)] = [
+                      ("bb", "্ব"), ("cc", "্চ"), ("dd", "্ড"),
+                      ("gg", "গ্গ"), ("jh", "ঝ"), ("ng", "ং"),
+                      ("nn", "ন্ন"), ("rr", "র্র"), ("ss", "স্স"),
+                      ("tt", "ট্ট"), ("kh", "খ"), ("bh", "ভ"),
+                      ("ch", "ছ"), ("dh", "ধ"), ("gh", "ঘ"),
+                      ("jh", "ঝ"), ("ph", "ফ"), ("th", "থ"),
+                      ("sh", "শ"), ("Sh", "ষ"), ("rh", "ঢ়"),
+                      ("ng", "ং"), ("ny", "ঞ"), ("Ng", "ঙ"),
+                      ("kk", "ক্ক"), ("gg", "গ্গ"),
+                      ("a", "া"), ("A", "আ"), ("i", "ি"),
+                      ("I", "ী"), ("u", "ু"), ("U", "ূ"),
+                      ("e", "ে"), ("E", "ৈ"), ("o", "ো"),
+                      ("O", "ৌ"), ("k", "ক"), ("K", "ক"),
+                      ("g", "গ"), ("G", "গ"), ("c", "চ"),
+                      ("C", "চ"), ("j", "জ"), ("J", "জ"),
+                      ("t", "ত"), ("T", "ট"), ("d", "দ"),
+                      ("D", "ড"), ("n", "ন"), ("N", "ণ"),
+                      ("p", "প"), ("P", "প"), ("f", "ফ"),
+                      ("F", "ফ"), ("b", "ব"), ("B", "ব"),
+                      ("v", "ভ"), ("m", "ম"), ("M", "ম"),
+                      ("r", "র"), ("R", "ড়"), ("l", "ল"),
+                      ("L", "ল"), ("s", "স"), ("S", "স"),
+                      ("h", "হ"), ("H", "হ"), ("y", "য"),
+                      ("Y", "য়"), ("w", "ও"), ("x", "ক্স"),
+                      ("z", "জ"), ("Z", "জ"), ("q", "ক"),
+                      ("0", "০"), ("1", "১"), ("2", "২"),
+                      ("3", "৩"), ("4", "৪"), ("5", "৫"),
+                      ("6", "৬"), ("7", "৭"), ("8", "৮"),
+                      ("9", "৯"),
+                      (".", "।"), (",", ","),
+                      // হসন্ত ও অন্যান্য
+                      ("o", "ো"), ("oi", "ৈ"), ("ou", "ৌ"),
+                      ("O", "ৌ"), ("E", "ৈ"),
+                  ]
+                  // লম্বা প্যাটার্ন আগে রাখতে সর্ট করি
+                  return raw.sorted { $0.0.count > $1.0.count }
+              }()
+
+              static func parse(_ input: String) -> String {
+                  var remaining = input
+                  var output = ""
+
+                  while !remaining.isEmpty {
                       var matched = false
-                      for length in [4,3,2,1].reversed() {
-                          let end = text.index(i, offsetBy: length, limitedBy: text.endIndex) ?? text.endIndex
-                          let sub = String(text[i..<end])
-                          if let replacement = mapping[sub] {
-                              bengali += replacement
-                              i = end
+                      for (pattern, replacement) in rules {
+                          if remaining.hasPrefix(pattern) {
+                              output += replacement
+                              remaining.removeFirst(pattern.count)
                               matched = true
                               break
                           }
                       }
                       if !matched {
-                          bengali += String(text[i])
-                          i = text.index(after: i)
+                          // কোনো রুল না মিললে ক্যারেক্টারটি যেমন আছে রেখে দাও
+                          output.append(remaining.removeFirst())
                       }
                   }
-                  return bengali
+                  return output
               }
           }
           EOF
 
-          cat << 'EOF' > BengaliTranslator/Sources/ToneManager.swift
-          enum Tone: String, CaseIterable, Identifiable {
-              case friendly = "Friendly"
-              case highProfile = "High Profile"
-              case bigBoss = "Big Boss"
-              case jokey = "Jokey"
-              
-              var id: String { self.rawValue }
-          }
-
-          struct ToneManager {
-              static func apply(tone: Tone, to translation: String) -> String {
-                  switch tone {
-                  case .friendly:
-                      return "Hey! 😊 \(translation)"
-                  case .highProfile:
-                      return "Dear Sir/Madam, I would like to inform you that \(translation)."
-                  case .bigBoss:
-                      return "FYI: \(translation). Please take necessary action."
-                  case .jokey:
-                      return "So, basically \(translation) – if you know what I mean! 😉"
-                  }
-              }
-          }
-          EOF
-
-          cat << 'EOF' > BengaliTranslator/Sources/TranslationService.swift
+          cat <<'EOF' > BanglaTranslator/BanglaTranslator/TranslationService.swift
           import Foundation
 
-          class TranslationService {
-              func translateMock(_ bengali: String, tone: Tone, completion: @escaping (String) -> Void) {
-                  let placeholder = "Translation model not included. Add BengaliToEnglish.mlmodel."
-                  DispatchQueue.main.async {
-                      completion(ToneManager.apply(tone: tone, to: placeholder))
+          class TranslationService: ObservableObject {
+              func translate(banglaText: String, tone: String, apiKey: String) async throws -> String {
+                  let systemPrompt: String
+                  switch tone {
+                  case "friendly":
+                      systemPrompt = "Translate the following Bengali text into natural, friendly English. Make the grammar perfect and the tone warm and conversational."
+                  case "management":
+                      systemPrompt = "Translate the following Bengali text into English suitable for a high‑profile management message. Use professional, polished, and respectful language with perfect grammar."
+                  case "boss":
+                      systemPrompt = "Translate the following Bengali text into English as if writing to a big boss/chairman sir. The tone should be extremely formal, deferential, and grammatically flawless."
+                  case "frank":
+                      systemPrompt = "Translate the following Bengali text into English in a joking, frank, and casual manner. Make it sound witty but grammatically correct."
+                  default:
+                      systemPrompt = "Translate the following Bengali text into English with correct grammar."
+                  }
+
+                  let url = URL(string: "https://api.openai.com/v1/chat/completions")!
+                  var request = URLRequest(url: url)
+                  request.httpMethod = "POST"
+                  request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                  request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+                  let body: [String: Any] = [
+                      "model": "gpt-3.5-turbo",
+                      "messages": [
+                          ["role": "system", "content": systemPrompt],
+                          ["role": "user", "content": banglaText]
+                      ],
+                      "temperature": 0.7
+                  ]
+                  request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                  let (data, response) = try await URLSession.shared.data(for: request)
+                  guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                      throw NSError(domain: "APIError", code: 1, userInfo: [NSLocalizedDescriptionKey: "API request failed"])
+                  }
+
+                  if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                     let choices = json["choices"] as? [[String: Any]],
+                     let message = choices.first?["message"] as? [String: Any],
+                     let content = message["content"] as? String {
+                      return content.trimmingCharacters(in: .whitespacesAndNewlines)
+                  } else {
+                      throw NSError(domain: "APIError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
                   }
               }
           }
           EOF
 
-          cat << 'EOF' > BengaliTranslator/Sources/ContentView.swift
+          cat <<'EOF' > BanglaTranslator/BanglaTranslator/SettingsView.swift
+          import SwiftUI
+
+          struct SettingsView: View {
+              @AppStorage("openai_api_key") private var apiKey = ""
+              @State private var showAlert = false
+
+              var body: some View {
+                  NavigationView {
+                      Form {
+                          Section(header: Text("OpenAI API Key")) {
+                              SecureField("Enter your API key", text: $apiKey)
+                              Button("Save") {
+                                  showAlert = true
+                              }
+                          }
+                      }
+                      .navigationTitle("Settings")
+                      .alert("Saved", isPresented: $showAlert) {
+                          Button("OK", role: .cancel) { }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat <<'EOF' > BanglaTranslator/BanglaTranslator/ContentView.swift
           import SwiftUI
 
           struct ContentView: View {
-              @State private var inputText: String = ""
-              @State private var translatedText: String = ""
-              @State private var selectedTone: Tone = .friendly
-              private let avro = AvroPhonetic()
-              private let translator = TranslationService()
-              
+              @State private var inputText = ""
+              @State private var outputText = ""
+              @State private var selectedTone = "friendly"
+              @State private var isLoading = false
+              @AppStorage("openai_api_key") private var apiKey = ""
+              @StateObject private var translationService = TranslationService()
+              @State private var showSettings = false
+
+              let tones = [
+                  ("friendly", "Friendly"),
+                  ("management", "High Profile Mgmt"),
+                  ("boss", "Big Boss / Chairman"),
+                  ("frank", "Jokingly / Frank")
+              ]
+
+              var banglaText: String {
+                  AvroParser.parse(inputText)
+              }
+
               var body: some View {
-                  VStack(spacing: 20) {
-                      Text("Bengali Avro → English")
-                          .font(.title.bold())
-                      
-                      TextField("লিখুন (Avro বা বাংলা মিক্স)...", text: $inputText)
-                          .textFieldStyle(.roundedBorder)
-                          .font(.system(size: 20))
-                          .padding(.horizontal)
-                      
-                      Picker("Tone", selection: $selectedTone) {
-                          ForEach(Tone.allCases) { tone in
-                              Text(tone.rawValue).tag(tone)
+                  NavigationView {
+                      VStack(spacing: 16) {
+                          // ইনপুট বক্স
+                          VStack(alignment: .leading) {
+                              Text("আপনার বাংলা / অভ্র ইনপুট")
+                                  .font(.headline)
+                              TextEditor(text: $inputText)
+                                  .frame(minHeight: 120)
+                                  .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray))
+                              Text("Converted: \(banglaText)")
+                                  .font(.caption)
+                                  .foregroundColor(.secondary)
+                          }
+
+                          // টোন সিলেক্টর
+                          VStack(alignment: .leading) {
+                              Text("Select Tone")
+                                  .font(.headline)
+                              Picker("Tone", selection: $selectedTone) {
+                                  ForEach(tones, id: \.0) { tone in
+                                      Text(tone.1).tag(tone.0)
+                                  }
+                              }
+                              .pickerStyle(SegmentedPickerStyle())
+                          }
+
+                          // ট্রান্সলেট বাটন
+                          Button(action: translate) {
+                              HStack {
+                                  if isLoading {
+                                      ProgressView()
+                                  }
+                                  Text("Translate")
+                              }
+                          }
+                          .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.isEmpty || isLoading)
+                          .buttonStyle(.borderedProminent)
+
+                          // আউটপুট
+                          VStack(alignment: .leading) {
+                              Text("Translated English")
+                                  .font(.headline)
+                              TextEditor(text: .constant(outputText))
+                                  .frame(minHeight: 120)
+                                  .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray))
+                                  .disabled(true)
                           }
                       }
-                      .pickerStyle(.segmented)
-                      .padding(.horizontal)
-                      
-                      Button("Translate") {
-                          processAndTranslate()
-                      }
-                      .buttonStyle(.borderedProminent)
                       .padding()
-                      
-                      TextEditor(text: .constant(translatedText))
-                          .frame(minHeight: 150)
-                          .border(Color.gray, width: 1)
-                          .padding(.horizontal)
-                          .font(.system(size: 18))
-                      
-                      Spacer()
+                      .navigationTitle("Bangla Translator")
+                      .toolbar {
+                          ToolbarItem(placement: .navigationBarTrailing) {
+                              Button(action: { showSettings = true }) {
+                                  Image(systemName: "gearshape")
+                              }
+                          }
+                      }
+                      .sheet(isPresented: $showSettings) {
+                          SettingsView()
+                      }
                   }
-                  .padding()
               }
-              
-              func processAndTranslate() {
-                  let containsBengali = inputText.unicodeScalars.contains { scalar in
-                      (0x0980...0x09FF).contains(scalar.value)
-                  }
-                  let bengaliText: String
-                  if containsBengali {
-                      bengaliText = inputText
-                  } else {
-                      bengaliText = avro.convertToBengali(inputText)
-                  }
-                  
-                  translator.translateMock(bengaliText, tone: selectedTone) { result in
-                      translatedText = result
+
+              private func translate() {
+                  guard !apiKey.isEmpty else { return }
+                  isLoading = true
+                  outputText = ""
+                  Task {
+                      do {
+                          let result = try await translationService.translate(
+                              banglaText: banglaText,
+                              tone: selectedTone,
+                              apiKey: apiKey
+                          )
+                          await MainActor.run {
+                              outputText = result
+                          }
+                      } catch {
+                          await MainActor.run {
+                              outputText = "Error: \(error.localizedDescription)"
+                          }
+                      }
+                      await MainActor.run {
+                          isLoading = false
+                      }
                   }
               }
           }
           EOF
 
-          cat << 'EOF' > BengaliTranslator/Sources/Info.plist
+      - name: Create Xcode project file
+        run: |
+          cat <<'EOF' > BanglaTranslator/BanglaTranslator.xcodeproj/project.pbxproj
+          // !$*UTF8*$!
+          {
+          	archiveVersion = 1;
+          	classes = {
+          	};
+          	objectVersion = 56;
+          	objects = {
+
+          /* Begin PBXBuildFile section */
+          		A1B2C3D401 /* BanglaTranslatorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D402; };
+          		A1B2C3D403 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D404; };
+          		A1B2C3D405 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D406; };
+          		A1B2C3D407 /* AvroParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D408; };
+          		A1B2C3D409 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40A; };
+          /* End PBXBuildFile section */
+
+          /* Begin PBXFileReference section */
+          		A1B2C3D402 /* BanglaTranslatorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BanglaTranslatorApp.swift; sourceTree = "<group>"; };
+          		A1B2C3D404 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+          		A1B2C3D406 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+          		A1B2C3D408 /* AvroParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvroParser.swift; sourceTree = "<group>"; };
+          		A1B2C3D40A /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
+          		A1B2C3D40B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+          /* End PBXFileReference section */
+
+          /* Begin PBXGroup section */
+          		A1B2C3D40C = {
+          			isa = PBXGroup;
+          			children = (
+          				A1B2C3D402,
+          				A1B2C3D404,
+          				A1B2C3D406,
+          				A1B2C3D408,
+          				A1B2C3D40A,
+          				A1B2C3D40B,
+          			);
+          			sourceTree = "<group>";
+          		};
+          /* End PBXGroup section */
+
+          /* Begin PBXNativeTarget section */
+          		A1B2C3D40D /* BanglaTranslator */ = {
+          			isa = PBXNativeTarget;
+          			buildConfigurationList = A1B2C3D40E;
+          			buildPhases = (
+          				A1B2C3D40F /* Sources */,
+          			);
+          			buildRules = (
+          			);
+          			dependencies = (
+          			);
+          			name = BanglaTranslator;
+          			productName = BanglaTranslator;
+          			productReference = A1B2C3D410 /* BanglaTranslator.app */;
+          			productType = "com.apple.product-type.application";
+          		};
+          /* End PBXNativeTarget section */
+
+          /* Begin PBXProject section */
+          		A1B2C3D411 /* Project object */ = {
+          			isa = PBXProject;
+          			attributes = {
+          				BuildIndependentTargetsInParallel = 1;
+          				LastSwiftUpdateCheck = 1540;
+          				LastUpgradeCheck = 1540;
+          			};
+          			buildConfigurationList = A1B2C3D412;
+          			compatibilityVersion = "Xcode 14.0";
+          			developmentRegion = en;
+          			hasScannedForEncodings = 0;
+          			knownRegions = (
+          				en,
+          				Base,
+          			);
+          			mainGroup = A1B2C3D40C;
+          			productRefGroup = A1B2C3D40C;
+          			projectDirPath = "";
+          			projectRoot = "";
+          			targets = (
+          				A1B2C3D40D,
+          			);
+          		};
+          /* End PBXProject section */
+
+          /* Begin PBXSourcesBuildPhase section */
+          		A1B2C3D40F /* Sources */ = {
+          			isa = PBXSourcesBuildPhase;
+          			buildActionMask = 2147483647;
+          			files = (
+          				A1B2C3D401,
+          				A1B2C3D403,
+          				A1B2C3D405,
+          				A1B2C3D407,
+          				A1B2C3D409,
+          			);
+          			runOnlyForDeploymentPostprocessing = 0;
+          		};
+          /* End PBXSourcesBuildPhase section */
+
+          /* Begin XCBuildConfiguration section */
+          		A1B2C3D413 /* Debug */ = {
+          			isa = XCBuildConfiguration;
+          			buildSettings = {
+          				CODE_SIGN_STYLE = Manual;
+          				CODE_SIGNING_ALLOWED = NO;
+          				CODE_SIGNING_REQUIRED = NO;
+          				CODE_SIGN_IDENTITY = "";
+          				PROVISIONING_PROFILE_SPECIFIER = "";
+          				DEVELOPMENT_TEAM = "";
+          				PRODUCT_NAME = "$(TARGET_NAME)";
+          				SWIFT_VERSION = 5.0;
+          				TARGETED_DEVICE_FAMILY = "1,2";
+          				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+          				INFOPLIST_FILE = Info.plist;
+          			};
+          			name = Debug;
+          		};
+          		A1B2C3D414 /* Release */ = {
+          			isa = XCBuildConfiguration;
+          			buildSettings = {
+          				CODE_SIGN_STYLE = Manual;
+          				CODE_SIGNING_ALLOWED = NO;
+          				CODE_SIGNING_REQUIRED = NO;
+          				CODE_SIGN_IDENTITY = "";
+          				PROVISIONING_PROFILE_SPECIFIER = "";
+          				DEVELOPMENT_TEAM = "";
+          				PRODUCT_NAME = "$(TARGET_NAME)";
+          				SWIFT_VERSION = 5.0;
+          				TARGETED_DEVICE_FAMILY = "1,2";
+          				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+          				INFOPLIST_FILE = Info.plist;
+          			};
+          			name = Release;
+          		};
+          		A1B2C3D40E /* Build configuration list for PBXNativeTarget "BanglaTranslator" */ = {
+          			isa = XCConfigurationList;
+          			buildConfigurations = (
+          				A1B2C3D413,
+          				A1B2C3D414,
+          			);
+          			defaultConfigurationIsVisible = 0;
+          			defaultConfigurationName = Release;
+          		};
+          		A1B2C3D412 /* Build configuration list for PBXProject "BanglaTranslator" */ = {
+          			isa = XCConfigurationList;
+          			buildConfigurations = (
+          				A1B2C3D413,
+          				A1B2C3D414,
+          			);
+          			defaultConfigurationIsVisible = 0;
+          			defaultConfigurationName = Release;
+          		};
+          /* End XCBuildConfiguration section */
+          };
+          EOF
+
+      - name: Create Info.plist
+        run: |
+          cat <<'EOF' > BanglaTranslator/BanglaTranslator/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>CFBundleDevelopmentRegion</key>
-              <string>en</string>
-              <key>CFBundleExecutable</key>
-              <string>$(EXECUTABLE_NAME)</string>
-              <key>CFBundleIdentifier</key>
-              <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-              <key>CFBundleInfoDictionaryVersion</key>
-              <string>6.0</string>
-              <key>CFBundleName</key>
-              <string>Bengali Translator</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
-              <key>CFBundleVersion</key>
-              <string>1</string>
-              <key>LSRequiresIPhoneOS</key>
-              <true/>
-              <key>UILaunchStoryboardName</key>
-              <string>LaunchScreen</string>
-              <key>UIRequiredDeviceCapabilities</key>
-              <array>
-                  <string>armv7</string>
-              </array>
-              <key>UISupportedInterfaceOrientations</key>
-              <array>
-                  <string>UIInterfaceOrientationPortrait</string>
-              </array>
+          	<key>CFBundleDevelopmentRegion</key>
+          	<string>$(DEVELOPMENT_LANGUAGE)</string>
+          	<key>CFBundleExecutable</key>
+          	<string>$(EXECUTABLE_NAME)</string>
+          	<key>CFBundleIdentifier</key>
+          	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+          	<key>CFBundleInfoDictionaryVersion</key>
+          	<string>6.0</string>
+          	<key>CFBundleName</key>
+          	<string>$(PRODUCT_NAME)</string>
+          	<key>CFBundlePackageType</key>
+          	<string>APPL</string>
+          	<key>CFBundleShortVersionString</key>
+          	<string>1.0</string>
+          	<key>CFBundleVersion</key>
+          	<string>1</string>
+          	<key>LSRequiresIPhoneOS</key>
+          	<true/>
+          	<key>UIApplicationSceneManifest</key>
+          	<dict>
+          		<key>UIApplicationSupportsMultipleScenes</key>
+          		<false/>
+          	</dict>
+          	<key>UILaunchScreen</key>
+          	<dict/>
+          	<key>UISupportedInterfaceOrientations</key>
+          	<array>
+          		<string>UIInterfaceOrientationPortrait</string>
+          		<string>UIInterfaceOrientationLandscapeLeft</string>
+          		<string>UIInterfaceOrientationLandscapeRight</string>
+          	</array>
           </dict>
           </plist>
           EOF
 
-      - name: Generate Xcode project (Xcode 15 compatible)
+      - name: Create ExportOptions.plist
         run: |
-          xcodegen --spec project.yml --project .
-        shell: bash
+          cat <<EOF > ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>method</key>
+          	<string>development</string>
+          	<key>signingStyle</key>
+          	<string>manual</string>
+          	<key>signingCertificate</key>
+          	<string>none</string>
+          	<key>provisioningProfiles</key>
+          	<dict/>
+          </dict>
+          </plist>
+          EOF
 
-      - name: Build archive
+      - name: Archive & Export IPA
         run: |
+          cd BanglaTranslator
           xcodebuild archive \
-            -project BengaliTranslator.xcodeproj \
-            -scheme BengaliTranslator \
-            -archivePath BengaliTranslator.xcarchive \
-            -sdk iphoneos \
+            -project BanglaTranslator.xcodeproj \
+            -scheme BanglaTranslator \
             -configuration Release \
+            -archivePath ../output/BanglaTranslator.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="" \
+            -destination 'generic/platform=iOS'
 
-      - name: Create export options for unsigned IPA
-        run: |
-          cat << 'EOF' > exportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict/>
-              <key>teamID</key>
-              <string></string>
-          </dict>
-          </plist>
-          EOF
-
-      - name: Export unsigned IPA
-        run: |
-          mkdir output
           xcodebuild -exportArchive \
-            -archivePath BengaliTranslator.xcarchive \
-            -exportPath output \
-            -exportOptionsPlist exportOptions.plist
+            -archivePath ../output/BanglaTranslator.xcarchive \
+            -exportOptionsPlist ../ExportOptions.plist \
+            -exportPath ../output/ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BengaliTranslator-unsigned
-          path: output/*.ipa
+          name: BanglaTranslator.ipa
+          path: output/ipa/*.ipa
