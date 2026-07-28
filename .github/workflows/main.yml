@@ -323,7 +323,7 @@ jobs:
           </plist>
           EOF
 
-      - name: Create project.yml for XcodeGen (dummy team)
+      - name: Create project.yml for XcodeGen
         run: |
           cat <<'EOF' > BanglaTranslator/project.yml
           name: BanglaTranslator
@@ -338,7 +338,6 @@ jobs:
               CODE_SIGNING_REQUIRED: NO
               CODE_SIGN_IDENTITY: ""
               PROVISIONING_PROFILE_SPECIFIER: ""
-              DEVELOPMENT_TEAM: "0123456789"
           targets:
             BanglaTranslator:
               type: application
@@ -362,27 +361,7 @@ jobs:
         working-directory: BanglaTranslator
         run: xcodegen generate
 
-      - name: Create ExportOptions.plist (no certificate, dummy team)
-        run: |
-          cat <<'EOF' > ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-          	<key>method</key>
-          	<string>debugging</string>
-          	<key>signingStyle</key>
-          	<string>manual</string>
-          	<!-- signCertificate key intentionally omitted to skip certificate check -->
-          	<key>provisioningProfiles</key>
-          	<dict/>
-          	<key>teamID</key>
-          	<string>0123456789</string>
-          </dict>
-          </plist>
-          EOF
-
-      - name: Archive and Export Unsigned IPA
+      - name: Archive Project
         run: |
           cd BanglaTranslator
           xcodebuild archive \
@@ -393,16 +372,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            DEVELOPMENT_TEAM="0123456789" \
             -destination 'generic/platform=iOS'
 
-          xcodebuild -exportArchive \
-            -archivePath ../output/BanglaTranslator.xcarchive \
-            -exportOptionsPlist ../ExportOptions.plist \
-            -exportPath ../output/ipa
+      - name: Package Unsigned IPA manually
+        run: |
+          mkdir -p output/ipa/Payload
+          cp -R output/BanglaTranslator.xcarchive/Products/Applications/BanglaTranslator.app output/ipa/Payload/
+          cd output/ipa
+          zip -r BanglaTranslator.ipa Payload
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: BanglaTranslator.ipa
-          path: output/ipa/*.ipa
+          path: output/ipa/BanglaTranslator.ipa
