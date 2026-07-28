@@ -324,7 +324,7 @@ jobs:
           </plist>
           EOF
 
-      - name: Create project.yml for XcodeGen
+      - name: Create project.yml for XcodeGen (with dummy team)
         run: |
           cat <<'EOF' > BanglaTranslator/project.yml
           name: BanglaTranslator
@@ -339,7 +339,7 @@ jobs:
               CODE_SIGNING_REQUIRED: NO
               CODE_SIGN_IDENTITY: ""
               PROVISIONING_PROFILE_SPECIFIER: ""
-              DEVELOPMENT_TEAM: ""
+              DEVELOPMENT_TEAM: "0123456789"   # <-- Dummy team ID
           targets:
             BanglaTranslator:
               type: application
@@ -363,7 +363,7 @@ jobs:
         working-directory: BanglaTranslator
         run: xcodegen generate
 
-      - name: Create ExportOptions.plist
+      - name: Create ExportOptions.plist with dummy teamID
         run: |
           cat <<'EOF' > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
@@ -371,18 +371,20 @@ jobs:
           <plist version="1.0">
           <dict>
           	<key>method</key>
-          	<string>development</string>
+          	<string>debugging</string>   <!-- "development" deprecated, use "debugging" -->
           	<key>signingStyle</key>
           	<string>manual</string>
           	<key>signingCertificate</key>
           	<string>none</string>
           	<key>provisioningProfiles</key>
           	<dict/>
+          	<key>teamID</key>
+          	<string>0123456789</string>   <!-- Same dummy team ID -->
           </dict>
           </plist>
           EOF
 
-      - name: Archive and Export IPA
+      - name: Archive and Export IPA (with dummy team)
         run: |
           cd BanglaTranslator
           xcodebuild archive \
@@ -393,6 +395,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="0123456789" \
             -destination 'generic/platform=iOS'
 
           xcodebuild -exportArchive \
