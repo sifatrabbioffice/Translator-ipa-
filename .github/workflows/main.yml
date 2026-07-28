@@ -1,24 +1,23 @@
 name: Build Unsigned IPA for Bengali-English Translator
 
 on:
-  workflow_dispatch:   # ম্যানুয়ালি ট্রিগার
+  workflow_dispatch:
   push:
     branches: [ main ]
 
 jobs:
   build:
-    runs-on: macos-14   # Xcode 15.4 এর মতো প্রয়োজনীয় টুল থাকবে
+    runs-on: macos-14
 
     steps:
-      - name: Checkout repository (optional, we just need a workspace)
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install xcodegen
         run: brew install xcodegen
 
       - name: Create project structure
-        run: |
-          mkdir -p BengaliTranslator/Sources
+        run: mkdir -p BengaliTranslator/Sources
 
       - name: Write xcodegen project spec
         run: |
@@ -47,7 +46,6 @@ jobs:
 
       - name: Write Source Files
         run: |
-          # App entry point
           cat << 'EOF' > BengaliTranslator/Sources/BengaliTranslatorApp.swift
           import SwiftUI
 
@@ -61,12 +59,10 @@ jobs:
           }
           EOF
 
-          # Avro Phonetic Parser (সীমিত কিন্তু কাজ করবে)
           cat << 'EOF' > BengaliTranslator/Sources/AvroPhonetic.swift
           import Foundation
 
           class AvroPhonetic {
-              // সরল Avro ম্যাপিং ও যুক্তবর্ণ হ্যান্ডলিং
               private let mapping: [String: String] = [
                   "a":"া", "aa":"আ", "i":"ি", "ii":"ী",
                   "u":"ু", "uu":"ূ", "r":"র", "rr":"ড়",
@@ -82,13 +78,11 @@ jobs:
               ]
               
               func convertToBengali(_ input: String) -> String {
-                  // খুব সিম্পল পার্সার: বড় হরফ ছোট হরফ এক করে, সর্বোচ্চ দৈর্ঘের ম্যাচ খোঁজে
                   let text = input.lowercased()
                   var bengali = ""
                   var i = text.startIndex
                   while i < text.endIndex {
                       var matched = false
-                      // 4 অক্ষর পর্যন্ত ট্রাই
                       for length in [4,3,2,1].reversed() {
                           let end = text.index(i, offsetBy: length, limitedBy: text.endIndex) ?? text.endIndex
                           let sub = String(text[i..<end])
@@ -100,7 +94,6 @@ jobs:
                           }
                       }
                       if !matched {
-                          // অক্ষর সরাসরি কপি (ইংরেজি থাকলে, যদিও Avro-তে অপ্রযোজ্য)
                           bengali += String(text[i])
                           i = text.index(after: i)
                       }
@@ -110,7 +103,6 @@ jobs:
           }
           EOF
 
-          # Tone manager
           cat << 'EOF' > BengaliTranslator/Sources/ToneManager.swift
           enum Tone: String, CaseIterable, Identifiable {
               case friendly = "Friendly"
@@ -123,7 +115,6 @@ jobs:
 
           struct ToneManager {
               static func apply(tone: Tone, to translation: String) -> String {
-                  // মক ইম্প্লিমেন্টেশন – আসল টোন পরে অ্যাডজাস্ট করবেন
                   switch tone {
                   case .friendly:
                       return "Hey! 😊 \(translation)"
@@ -138,23 +129,12 @@ jobs:
           }
           EOF
 
-          # Translation service (placeholder)
           cat << 'EOF' > BengaliTranslator/Sources/TranslationService.swift
           import Foundation
-          // import CoreML   (আসল মডেল যোগ করলে আনকমেন্ট করুন)
 
           class TranslationService {
-              // TODO: আপনার নিজের BengaliToEnglish.mlmodel প্রোজেক্টে যোগ করুন
-              // func translate(bengaliText: String, completion: @escaping (String) -> Void) {
-              //     guard let model = try? BengaliToEnglish(configuration: MLModelConfiguration()) else {
-              //         completion("Model loading failed")
-              //         return
-              //     }
-              //     // মডেল ইনফারেন্স কোড এখানে
-              // }
-              
+              // TODO: Add your Core ML model (BengaliToEnglish.mlmodel) to the project
               func translateMock(_ bengali: String, tone: Tone, completion: @escaping (String) -> Void) {
-                  // আপাতত শুধু ট্রান্সলেট হয়নি বলে জানাবে
                   let placeholder = "Translation model not included. Add BengaliToEnglish.mlmodel."
                   DispatchQueue.main.async {
                       completion(ToneManager.apply(tone: tone, to: placeholder))
@@ -163,7 +143,6 @@ jobs:
           }
           EOF
 
-          # ContentView with UI
           cat << 'EOF' > BengaliTranslator/Sources/ContentView.swift
           import SwiftUI
 
@@ -179,13 +158,11 @@ jobs:
                       Text("Bengali Avro → English")
                           .font(.title.bold())
                       
-                      // ইনপুট বক্স (Avro ফোনেটিক বা বাংলা)
                       TextField("লিখুন (Avro বা বাংলা মিক্স)...", text: $inputText)
                           .textFieldStyle(.roundedBorder)
                           .font(.system(size: 20))
                           .padding(.horizontal)
                       
-                      // টোন সিলেক্টর
                       Picker("Tone", selection: $selectedTone) {
                           ForEach(Tone.allCases) { tone in
                               Text(tone.rawValue).tag(tone)
@@ -200,7 +177,6 @@ jobs:
                       .buttonStyle(.borderedProminent)
                       .padding()
                       
-                      // আউটপুট বক্স (ইংরেজি)
                       TextEditor(text: .constant(translatedText))
                           .frame(minHeight: 150)
                           .border(Color.gray, width: 1)
@@ -213,7 +189,6 @@ jobs:
               }
               
               func processAndTranslate() {
-                  // 1) যদি ইনপুটে বাংলা ইউনিকোড থাকে, সরাসরি ব্যবহার করব, না হলে Avro পার্স করব
                   let containsBengali = inputText.unicodeScalars.contains { scalar in
                       (0x0980...0x09FF).contains(scalar.value)
                   }
@@ -224,7 +199,6 @@ jobs:
                       bengaliText = avro.convertToBengali(inputText)
                   }
                   
-                  // 2) অনুবাদ (বর্তমানে মক)
                   translator.translateMock(bengaliText, tone: selectedTone) { result in
                       translatedText = result
                   }
@@ -232,7 +206,6 @@ jobs:
           }
           EOF
 
-          # Info.plist (minimum)
           cat << 'EOF' > BengaliTranslator/Sources/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -270,10 +243,10 @@ jobs:
           </plist>
           EOF
 
-      - name: Generate Xcode project
+      - name: Generate Xcode project (FIXED)
         run: |
-          xcodegen --spec project.yml --project BengaliTranslator
-        # এতে BengaliTranslator.xcodeproj তৈরি হবে
+          xcodegen --spec project.yml --project .   # <-- রুটেই .xcodeproj বানাবে
+        shell: bash
 
       - name: Build archive
         run: |
