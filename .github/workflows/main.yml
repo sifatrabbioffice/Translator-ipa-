@@ -19,13 +19,14 @@ jobs:
       - name: Create project structure
         run: mkdir -p BengaliTranslator/Sources
 
-      - name: Write xcodegen project spec (with Xcode 15 compatibility)
+      - name: Write xcodegen project spec (Compatible with Xcode 15)
         run: |
           cat << 'EOF' > project.yml
           name: BengaliTranslator
           options:
             bundleIdPrefix: com.translator
             xcodeVersion: "15.0"
+            objectVersion: 56
           targets:
             BengaliTranslator:
               type: application
@@ -134,7 +135,6 @@ jobs:
           import Foundation
 
           class TranslationService {
-              // TODO: Add your Core ML model (BengaliToEnglish.mlmodel) to the project
               func translateMock(_ bengali: String, tone: Tone, completion: @escaping (String) -> Void) {
                   let placeholder = "Translation model not included. Add BengaliToEnglish.mlmodel."
                   DispatchQueue.main.async {
@@ -244,7 +244,7 @@ jobs:
           </plist>
           EOF
 
-      - name: Generate Xcode project (Compatible with Xcode 15)
+      - name: Generate Xcode project (Xcode 15 compatible)
         run: |
           xcodegen --spec project.yml --project .
         shell: bash
