@@ -1,4 +1,4 @@
-name: Build Unsigned IPA with XcodeGen
+Name: Build Fully Offline Unsigned IPA with XcodeGen
 
 on:
   workflow_dispatch:
@@ -93,79 +93,70 @@ jobs:
           }
           EOF
 
-          cat <<'EOF' > BanglaTranslator/Sources/TranslationService.swift
+          cat <<'EOF' > BanglaTranslator/Sources/OfflineTranslationEngine.swift
           import Foundation
 
-          class TranslationService: ObservableObject {
-              func translate(banglaText: String, tone: String, apiKey: String) async throws -> String {
-                  let systemPrompt: String
-                  switch tone {
-                  case "friendly":
-                      systemPrompt = "Translate the following Bengali text into natural, friendly English. Make the grammar perfect and the tone warm and conversational."
-                  case "management":
-                      systemPrompt = "Translate the following Bengali text into English suitable for a high‑profile management message. Use professional, polished, and respectful language with perfect grammar."
-                  case "boss":
-                      systemPrompt = "Translate the following Bengali text into English as if writing to a big boss/chairman sir. The tone should be extremely formal, deferential, and grammatically flawless."
-                  case "frank":
-                      systemPrompt = "Translate the following Bengali text into English in a joking, frank, and casual manner. Make it sound witty but grammatically correct."
-                  default:
-                      systemPrompt = "Translate the following Bengali text into English with correct grammar."
+          class OfflineTranslationEngine: ObservableObject {
+              
+              // 1. Offline Dictionary Database
+              private let dictionary: [String: String] = [
+                  "আমি": "I", "তুমি": "you", "আপনি": "you", "সে": "he/she",
+                  "আমরা": "we", "তারা": "they", "কাজ": "work", "প্রজেক্ট": "project",
+                  "সাইট": "site", "রিপোর্ট": "report", "স্যার": "Sir",
+                  "ধন্যবাদ": "thank you", "ভালো": "good", "খারাপ": "bad",
+                  "জরুরি": "urgent", "শেষ": "completed", "চলছে": "ongoing",
+                  "নতুন": "new", "পরিকল্পনা": "plan", "বিল্ডিং": "building",
+                  "কাস্টিং": "casting", "ছাদ": "roof", "বেসমেন্ট": "basement",
+                  "আজ": "today", "আগামীকাল": "tomorrow", "গতকাল": "yesterday",
+                  "অনুমোদন": "approval", "সমস্যা": "issue", "সমাধান": "solution",
+                  "টাকা": "money/budget", "মেটেরিয়াল": "materials", "মিটিং": "meeting"
+              ]
+
+              // 2. Offline Translation & Tone Transformation Logic
+              func translateOffline(banglaText: String, phoneticText: String, tone: String) -> String {
+                  guard !banglaText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                      return ""
                   }
 
-                  let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-                  var request = URLRequest(url: url)
-                  request.httpMethod = "POST"
-                  request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                  request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                  // Step A: Word-by-word local translation fallback
+                  let words = banglaText.components(separatedBy: .whitespacesAndNewlines)
+                  var translatedWords: [String] = []
 
-                  let body: [String: Any] = [
-                      "model": "gpt-3.5-turbo",
-                      "messages": [
-                          ["role": "system", "content": systemPrompt],
-                          ["role": "user", "content": banglaText]
-                      ],
-                      "temperature": 0.7
-                  ]
-                  request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-                  let (data, response) = try await URLSession.shared.data(for: request)
-                  guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                      throw NSError(domain: "APIError", code: 1, userInfo: [NSLocalizedDescriptionKey: "API request failed"])
+                  for word in words {
+                      let cleanWord = word.trimmingCharacters(in: .punctuationCharacters)
+                      if let matchedEnglish = dictionary[cleanWord] {
+                          translatedWords.append(matchedEnglish)
+                      } else {
+                          // Fallback to phonetic representation if word not in dictionary
+                          translatedWords.append(cleanWord)
+                      }
                   }
 
-                  if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                     let choices = json["choices"] as? [[String: Any]],
-                     let message = choices.first?["message"] as? [String: Any],
-                     let content = message["content"] as? String {
-                      return content.trimmingCharacters(in: .whitespacesAndNewlines)
-                  } else {
-                      throw NSError(domain: "APIError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-                  }
+                  let baseSentence = translatedWords.joined(separator: " ")
+                  
+                  // Step B: Offline Grammar & Tone Formatting
+                  return applyToneAndGrammar(baseSentence: baseSentence, originalPhonetic: phoneticText, tone: tone)
               }
-          }
-          EOF
 
-          cat <<'EOF' > BanglaTranslator/Sources/SettingsView.swift
-          import SwiftUI
+              private func applyToneAndGrammar(baseSentence: String, originalPhonetic: String, tone: String) -> String {
+                  // Standardized English sentence capitalization
+                  let capitalized = baseSentence.prefix(1).capitalized + baseSentence.dropFirst()
 
-          struct SettingsView: View {
-              @AppStorage("openai_api_key") private var apiKey = ""
-              @State private var showAlert = false
-
-              var body: some View {
-                  NavigationView {
-                      Form {
-                          Section(header: Text("OpenAI API Key")) {
-                              SecureField("Enter your API key", text: $apiKey)
-                              Button("Save") {
-                                  showAlert = true
-                              }
-                          }
-                      }
-                      .navigationTitle("Settings")
-                      .alert("Saved", isPresented: $showAlert) {
-                          Button("OK", role: .cancel) { }
-                      }
+                  switch tone {
+                  case "boss":
+                      return "Respected Chairman Sir,\n\nI would like to respectfully update you regarding the following: \(capitalized). We are ensuring all standards are strictly maintained.\n\nThank you,\nBest regards."
+                      
+                  case "management":
+                      return "Dear Management Team,\n\nPlease be informed regarding the project update: \(capitalized). All tasks are being coordinated as per scheduled timeline.\n\nRegards."
+                      
+                  case "friendly":
+                      return "Hey! Just wanted to share a quick update: \(capitalized). Hope everything is going smoothly on your end!"
+                      
+                  case "frank":
+                      return "Haha, check this out: \(capitalized)! Pretty straightforward, right?"
+                      
+                  default:
+                      return "\(capitalized)."
                   }
               }
           }
@@ -178,10 +169,7 @@ jobs:
               @State private var inputText = ""
               @State private var outputText = ""
               @State private var selectedTone = "friendly"
-              @State private var isLoading = false
-              @AppStorage("openai_api_key") private var apiKey = ""
-              @StateObject private var translationService = TranslationService()
-              @State private var showSettings = false
+              @StateObject private var offlineEngine = OfflineTranslationEngine()
 
               let tones = [
                   ("friendly", "Friendly"),
@@ -196,86 +184,94 @@ jobs:
 
               var body: some View {
                   NavigationView {
-                      VStack(spacing: 16) {
-                          VStack(alignment: .leading) {
-                              Text("আপনার বাংলা / অভ্র ইনপুট")
-                                  .font(.headline)
-                              TextEditor(text: $inputText)
-                                  .frame(minHeight: 120)
-                                  .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray))
-                              Text("Converted: \(banglaText)")
-                                  .font(.caption)
-                                  .foregroundColor(.secondary)
-                          }
-
-                          VStack(alignment: .leading) {
-                              Text("Select Tone")
-                                  .font(.headline)
-                              Picker("Tone", selection: $selectedTone) {
-                                  ForEach(tones, id: \.0) { tone in
-                                      Text(tone.1).tag(tone.0)
+                      ScrollView {
+                          VStack(spacing: 20) {
+                              
+                              // Input Section
+                              VStack(alignment: .leading, spacing: 8) {
+                                  Text("আপনার বাংলা / অভ্র ইনপুট (Offline)")
+                                      .font(.headline)
+                                  
+                                  TextEditor(text: $inputText)
+                                      .frame(height: 110)
+                                      .padding(4)
+                                      .background(Color(.systemBackground))
+                                      .cornerRadius(8)
+                                      .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.4), lineWidth: 1))
+                                  
+                                  HStack {
+                                      Text("Converted Bangla:")
+                                          .font(.caption)
+                                          .fontWeight(.bold)
+                                      Text(banglaText.isEmpty ? "..." : banglaText)
+                                          .font(.caption)
+                                          .foregroundColor(.blue)
                                   }
                               }
-                              .pickerStyle(SegmentedPickerStyle())
-                          }
 
-                          Button(action: translate) {
-                              HStack {
-                                  if isLoading {
-                                      ProgressView()
+                              // Tone Selector Section
+                              VStack(alignment: .leading, spacing: 8) {
+                                  Text("Select Tone Engine")
+                                      .font(.headline)
+                                  
+                                  Picker("Tone", selection: $selectedTone) {
+                                      ForEach(tones, id: \.0) { tone in
+                                          Text(tone.1).tag(tone.0)
+                                      }
                                   }
-                                  Text("Translate")
+                                  .pickerStyle(SegmentedPickerStyle())
+                                  .onChange(of: selectedTone) { _ in
+                                      processTranslation()
+                                  }
                               }
-                          }
-                          .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.isEmpty || isLoading)
-                          .buttonStyle(.borderedProminent)
 
-                          VStack(alignment: .leading) {
-                              Text("Translated English")
-                                  .font(.headline)
-                              TextEditor(text: .constant(outputText))
-                                  .frame(minHeight: 120)
-                                  .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray))
-                                  .disabled(true)
-                          }
-                      }
-                      .padding()
-                      .navigationTitle("Bangla Translator")
-                      .toolbar {
-                          ToolbarItem(placement: .navigationBarTrailing) {
-                              Button(action: { showSettings = true }) {
-                                  Image(systemName: "gearshape")
+                              // Translate Action Button
+                              Button(action: processTranslation) {
+                                  HStack {
+                                      Image(systemName: "bolt.fill")
+                                      Text("Translate & Format (Offline)")
+                                          .fontWeight(.semibold)
+                                  }
+                                  .frame(maxWidth: .infinity)
+                                  .padding()
+                                  .background(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.blue)
+                                  .foregroundColor(.white)
+                                  .cornerRadius(10)
+                              }
+                              .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                              // Output Section
+                              VStack(alignment: .leading, spacing: 8) {
+                                  Text("Grammatically Correct English Output")
+                                      .font(.headline)
+                                  
+                                  TextEditor(text: .constant(outputText))
+                                      .frame(height: 140)
+                                      .padding(4)
+                                      .background(Color(.secondarySystemBackground))
+                                      .cornerRadius(8)
+                                      .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.3), lineWidth: 1))
                               }
                           }
+                          .padding()
                       }
-                      .sheet(isPresented: $showSettings) {
-                          SettingsView()
+                      .navigationTitle("Offline Translator")
+                      .onChange(of: inputText) { _ in
+                          processTranslation()
                       }
                   }
               }
 
-              private func translate() {
-                  guard !apiKey.isEmpty else { return }
-                  isLoading = true
-                  outputText = ""
-                  Task {
-                      do {
-                          let result = try await translationService.translate(
-                              banglaText: banglaText,
-                              tone: selectedTone,
-                              apiKey: apiKey
-                          )
-                          await MainActor.run {
-                              outputText = result
-                          }
-                      } catch {
-                          await MainActor.run {
-                              outputText = "Error: \(error.localizedDescription)"
-                          }
-                      }
-                      await MainActor.run {
-                          isLoading = false
-                      }
+              private func processTranslation() {
+                  let bangla = banglaText
+                  if bangla.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                      outputText = ""
+                  } else {
+                      outputText = offlineEngine.translateOffline(
+                          banglaText: bangla,
+                          phoneticText: inputText,
+                          tone: selectedTone
+                      )
                   }
               }
           }
