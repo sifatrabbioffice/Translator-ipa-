@@ -19,12 +19,13 @@ jobs:
       - name: Create project structure
         run: mkdir -p BengaliTranslator/Sources
 
-      - name: Write xcodegen project spec
+      - name: Write xcodegen project spec (with Xcode 15 compatibility)
         run: |
           cat << 'EOF' > project.yml
           name: BengaliTranslator
           options:
             bundleIdPrefix: com.translator
+            xcodeVersion: "15.0"
           targets:
             BengaliTranslator:
               type: application
@@ -243,9 +244,9 @@ jobs:
           </plist>
           EOF
 
-      - name: Generate Xcode project (FIXED)
+      - name: Generate Xcode project (Compatible with Xcode 15)
         run: |
-          xcodegen --spec project.yml --project .   # <-- রুটেই .xcodeproj বানাবে
+          xcodegen --spec project.yml --project .
         shell: bash
 
       - name: Build archive
