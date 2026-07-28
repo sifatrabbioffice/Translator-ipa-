@@ -12,7 +12,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- Project structure ---
       - name: Create project directory and Swift files
         run: |
           mkdir -p BanglaTranslator/Sources
@@ -324,7 +323,7 @@ jobs:
           </plist>
           EOF
 
-      - name: Create project.yml for XcodeGen (with dummy team)
+      - name: Create project.yml for XcodeGen (dummy team)
         run: |
           cat <<'EOF' > BanglaTranslator/project.yml
           name: BanglaTranslator
@@ -339,7 +338,7 @@ jobs:
               CODE_SIGNING_REQUIRED: NO
               CODE_SIGN_IDENTITY: ""
               PROVISIONING_PROFILE_SPECIFIER: ""
-              DEVELOPMENT_TEAM: "0123456789"   # <-- Dummy team ID
+              DEVELOPMENT_TEAM: "0123456789"
           targets:
             BanglaTranslator:
               type: application
@@ -363,7 +362,7 @@ jobs:
         working-directory: BanglaTranslator
         run: xcodegen generate
 
-      - name: Create ExportOptions.plist with dummy teamID
+      - name: Create ExportOptions.plist (no certificate, dummy team)
         run: |
           cat <<'EOF' > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
@@ -371,20 +370,19 @@ jobs:
           <plist version="1.0">
           <dict>
           	<key>method</key>
-          	<string>debugging</string>   <!-- "development" deprecated, use "debugging" -->
+          	<string>debugging</string>
           	<key>signingStyle</key>
           	<string>manual</string>
-          	<key>signingCertificate</key>
-          	<string>none</string>
+          	<!-- signCertificate key intentionally omitted to skip certificate check -->
           	<key>provisioningProfiles</key>
           	<dict/>
           	<key>teamID</key>
-          	<string>0123456789</string>   <!-- Same dummy team ID -->
+          	<string>0123456789</string>
           </dict>
           </plist>
           EOF
 
-      - name: Archive and Export IPA (with dummy team)
+      - name: Archive and Export Unsigned IPA
         run: |
           cd BanglaTranslator
           xcodebuild archive \
