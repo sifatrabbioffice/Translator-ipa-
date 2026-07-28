@@ -1,4 +1,4 @@
-Name: Build Fully Offline Unsigned IPA with XcodeGen
+name: Build Fully Offline Unsigned IPA with XcodeGen
 
 on:
   workflow_dispatch:
@@ -383,7 +383,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            -destination 'generic/platform=iOS'
+            -destination 'generic/platform/iOS'
 
       - name: Package Unsigned IPA manually
         run: |
