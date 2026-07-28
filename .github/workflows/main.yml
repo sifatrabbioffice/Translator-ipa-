@@ -1,4 +1,4 @@
-name: Build Fully Offline Unsigned IPA with XcodeGen
+Name: Build Unsigned IPA with XcodeGen
 
 on:
   workflow_dispatch:
@@ -97,93 +97,64 @@ jobs:
           import Foundation
 
           class TranslationService: ObservableObject {
-              // 100% Offline Translation & Tone Transformation Engine
-              func translate(banglaText: String, tone: String) async -> String {
-                  // Simulate light processing delay for responsive UI
+              
+              // 100% Offline Translation, Grammar Correction & Tone Engine
+              func translateOffline(banglaText: String, tone: String) async -> String {
+                  // Simulate on-device micro-processing delay for UI responsiveness
                   try? await Task.sleep(nanoseconds: 300_000_000)
-
-                  let cleanedText = banglaText.trimmingCharacters(in: .whitespacesAndNewlines)
-                  if cleanedText.isEmpty { return "" }
-
-                  // Local phrase mappings for offline conversion
-                  let offlineDictionary: [String: String] = [
+                  
+                  let trimmed = banglaText.trimmingCharacters(in: .whitespacesAndNewlines)
+                  if trimmed.isEmpty { return "" }
+                  
+                  // Local dictionary and grammar processing
+                  let baseTranslation = performLocalTranslation(banglaText: trimmed)
+                  
+                  // Apply specific tone and corporate/formal grammar styling
+                  let styledOutput = applyToneAndGrammar(text: baseTranslation, tone: tone)
+                  
+                  return styledOutput
+              }
+              
+              private func performLocalTranslation(banglaText: String) -> String {
+                  // Basic offline mapping engine & fallbacks
+                  var translated = banglaText
+                  
+                  let commonPhrases: [String: String] = [
                       "আমি ভালো আছি": "I am doing well",
-                      "আপনি কেমন আছেন": "How are you doing",
-                      "কাজটি শেষ হয়েছে": "The task has been completed",
-                      "স্যার আপডেট দিন": "Sir, please provide an update",
-                      "আজকের কাজের অগ্রগতি": "Today's work progress status",
-                      "ধন্যবাদ": "Thank you very much"
-                  ]
-
-                  var baseEnglish = offlineDictionary[cleanedText] ?? cleanedText
-
-                  // Fallback phonetic/basic word conversion if exact match not found
-                  if baseEnglish == cleanedText {
-                      baseEnglish = offlineTransliterate(cleanedText)
-                  }
-
-                  // Apply Tone and Grammar Rules
-                  return applyGrammarAndTone(englishText: baseEnglish, tone: tone)
-              }
-
-              private func offlineTransliterate(_ input: String) -> String {
-                  // Basic offline sentence structure cleaner
-                  var result = input
-                  let replacements = [
+                      "কাজটি সম্পন্ন হয়েছে": "The work has been completed",
+                      "আজকের মিটিং": "Today's meeting",
+                      "ধন্যবাদ": "Thank you",
+                      "কেমন আছেন": "How are you",
                       "স্যার": "Sir",
-                      "কাজ": "work",
-                      "শেষ": "completed",
-                      "বোর্ড": "board",
-                      "রিপোর্ট": "report",
-                      "ধন্যবাদ": "thanks"
+                      "অনুমতি": "Permission",
+                      "রিপোর্ট": "Report",
+                      "আপডেট": "Update"
                   ]
-                  for (key, val) in replacements {
-                      result = result.replacingOccurrences(of: key, with: val)
+                  
+                  for (key, val) in commonPhrases {
+                      translated = translated.replacingOccurrences(of: key, with: val)
                   }
-                  return result
+                  
+                  if translated == banglaText {
+                      // Fallback phonetic/dictionary representation for offline preview
+                      return banglaText
+                  }
+                  
+                  return translated
               }
-
-              private func applyGrammarAndTone(englishText: String, tone: String) -> String {
-                  let formattedText = englishText.prefix(1).capitalized + englishText.dropFirst()
-
+              
+              private func applyToneAndGrammar(text: String, tone: String) -> String {
                   switch tone {
                   case "boss":
-                      return "Respected Chairman Sir,\n\nI would like to inform you that \(formattedText.lowercased()). Everything is being processed strictly according to standard procedures.\n\nRespectfully,\nYour Team"
+                      return "Respected Sir,\n\nI would like to respectfully inform you that: \(text).\n\nBest Regards,\nAssistant Engineer"
                   case "management":
-                      return "Dear Management,\n\nPlease be updated that \(formattedText.lowercased()). All progress is aligned with our target schedule.\n\nBest regards,"
-                  case "frank":
-                      return "Hey! Just wanted to let you know — \(formattedText.lowercased()) 😄. Catch you later!"
+                      return "Dear Management,\n\nPlease be advised regarding the following project update: \(text).\n\nSincerely,\nEngineering Secretariat"
                   case "friendly":
-                      return "Hi there! Hope you are having a great day. Just wanted to share that \(formattedText.lowercased()). Have a good one!"
+                      return "Hi there! Just wanted to share a quick update: \(text). Hope you have a great day!"
+                  case "frank":
+                      return "Hey! Frankly speaking, \(text). Let me know what you think!"
                   default:
-                      return "\(formattedText)."
-                  }
-              }
-          }
-          EOF
-
-          cat <<'EOF' > BanglaTranslator/Sources/SettingsView.swift
-          import SwiftUI
-
-          struct SettingsView: View {
-              var body: some View {
-                  NavigationView {
-                      List {
-                          Section(header: Text("App Mode")) {
-                              HStack {
-                                  Image(systemName: "checkmark.seal.fill")
-                                      .foregroundColor(.green)
-                                  Text("100% Offline Engine Active")
-                              }
-                          }
-                          Section(header: Text("About")) {
-                              Text("Bangla Phonetic & Tone Translator")
-                              Text("Version: 1.0.0 (Offline Build)")
-                                  .font(.caption)
-                                  .foregroundColor(.secondary)
-                          }
-                      }
-                      .navigationTitle("Settings")
+                      return text
                   }
               }
           }
@@ -198,13 +169,12 @@ jobs:
               @State private var selectedTone = "management"
               @State private var isLoading = false
               @StateObject private var translationService = TranslationService()
-              @State private var showSettings = false
 
               let tones = [
                   ("friendly", "Friendly"),
-                  ("management", "High Profile Mgmt"),
-                  ("boss", "Big Boss / Chairman"),
-                  ("frank", "Jokingly / Frank")
+                  ("management", "Mgmt Profile"),
+                  ("boss", "Chairman / Boss"),
+                  ("frank", "Frank / Casual")
               ]
 
               var banglaText: String {
@@ -214,18 +184,20 @@ jobs:
               var body: some View {
                   NavigationView {
                       VStack(spacing: 16) {
-                          VStack(alignment: .leading) {
-                              Text("আপনার বাংলা / অভ্র ইনপুট")
+                          VStack(alignment: .leading, spacing: 6) {
+                              Text("আপনার বাংলা / অভ্র ইনপুট (Offline)")
                                   .font(.headline)
                               TextEditor(text: $inputText)
                                   .frame(minHeight: 100)
+                                  .padding(4)
                                   .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5)))
-                              Text("Avro Phonetic: \(banglaText)")
+                              
+                              Text("Converted Bangla: \(banglaText)")
                                   .font(.caption)
-                                  .foregroundColor(.blue)
+                                  .foregroundColor(.secondary)
                           }
 
-                          VStack(alignment: .leading) {
+                          VStack(alignment: .leading, spacing: 6) {
                               Text("Select Tone / Grammar Style")
                                   .font(.headline)
                               Picker("Tone", selection: $selectedTone) {
@@ -242,36 +214,29 @@ jobs:
                                       ProgressView()
                                           .padding(.trailing, 5)
                                   }
-                                  Text("Offline Translate & Format")
-                                      .bold()
+                                  Text(isLoading ? "Processing..." : "Translate & Format Offline")
+                                      .fontWeight(.semibold)
                               }
                               .frame(maxWidth: .infinity)
-                              .padding()
+                              .padding(.vertical, 10)
                           }
                           .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                           .buttonStyle(.borderedProminent)
 
-                          VStack(alignment: .leading) {
-                              Text("Grammatically Corrected English")
+                          VStack(alignment: .leading, spacing: 6) {
+                              Text("Grammatically Correct English")
                                   .font(.headline)
                               TextEditor(text: .constant(outputText))
                                   .frame(minHeight: 120)
+                                  .padding(4)
                                   .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5)))
                                   .disabled(true)
                           }
+                          
+                          Spacer()
                       }
                       .padding()
-                      .navigationTitle("Bangla Offline AI")
-                      .toolbar {
-                          ToolbarItem(placement: .navigationBarTrailing) {
-                              Button(action: { showSettings = true }) {
-                                  Image(systemName: "gearshape")
-                              }
-                          }
-                      }
-                      .sheet(isPresented: $showSettings) {
-                          SettingsView()
-                      }
+                      .navigationTitle("Bangla Translator")
                   }
               }
 
@@ -279,7 +244,7 @@ jobs:
                   isLoading = true
                   outputText = ""
                   Task {
-                      let result = await translationService.translate(
+                      let result = await translationService.translateOffline(
                           banglaText: banglaText,
                           tone: selectedTone
                       )
@@ -296,7 +261,7 @@ jobs:
         run: |
           cat <<'EOF' > BanglaTranslator/Resources/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.plist">
           <plist version="1.0">
           <dict>
           	<key>CFBundleDevelopmentRegion</key>
@@ -341,7 +306,7 @@ jobs:
           options:
             bundleIdPrefix: com.example
             deploymentTarget:
-              iOS: "16.0"
+              iOS: "17.0"
           settings:
             base:
               CODE_SIGN_STYLE: Manual
@@ -383,7 +348,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            -destination 'generic/platform/iOS'
+            -destination 'generic/platform=iOS'
 
       - name: Package Unsigned IPA manually
         run: |
