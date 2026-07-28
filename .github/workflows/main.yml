@@ -1,4 +1,4 @@
-name: Build Unsigned IPA with XcodeGen
+name: Build Unsigned IPA with XcodeGen (Fully Offline)
 
 on:
   workflow_dispatch:
@@ -12,12 +12,95 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create project directory and Swift files
+      - name: Create project directory structure
         run: |
           mkdir -p BanglaTranslator/Sources
           mkdir -p BanglaTranslator/Resources
 
-      - name: Write Swift source files
+      - name: Download offline dictionary + grammar data
+        run: |
+          # Simple but usable Bangla↔English word dictionary (JSON)
+          # You can later replace this URL with a bigger dictionary
+          curl -L -o BanglaTranslator/Resources/dictionary.json \
+            "https://raw.githubusercontent.com/nullsaint/BengaliDictionary/master/BengaliDictionary_17.csv" || true
+
+          # Fallback: create a usable embedded dictionary if download fails
+          cat << 'EOF' > BanglaTranslator/Resources/dictionary.json
+          {
+            "আমি": "I",
+            "তুমি": "you",
+            "সে": "he/she",
+            "আমরা": "we",
+            "তারা": "they",
+            "ভালো": "good",
+            "খারাপ": "bad",
+            "ধন্যবাদ": "thank you",
+            "স্বাগতম": "welcome",
+            "নাম": "name",
+            "কি": "what",
+            "কেমন": "how",
+            "আছেন": "are",
+            "আছো": "are",
+            "হ্যাঁ": "yes",
+            "না": "no",
+            "দয়া": "please",
+            "করে": "do",
+            "যাব": "will go",
+            "যাচ্ছি": "going",
+            "আসছি": "coming",
+            "খাব": "will eat",
+            "পানি": "water",
+            "ভাত": "rice",
+            "মাছ": "fish",
+            "মাংস": "meat",
+            "বাড়ি": "house/home",
+            "স্কুল": "school",
+            "অফিস": "office",
+            "বন্ধু": "friend",
+            "পরিবার": "family",
+            "মা": "mother",
+            "বাবা": "father",
+            "ভাই": "brother",
+            "বোন": "sister",
+            "ভালোবাসা": "love",
+            "সুন্দর": "beautiful",
+            "বড়": "big",
+            "ছোট": "small",
+            "নতুন": "new",
+            "পুরনো": "old",
+            "আজ": "today",
+            "কাল": "tomorrow/yesterday",
+            "এখন": "now",
+            "পরে": "later",
+            "আগে": "before",
+            "সাহায্য": "help",
+            "দরকার": "need",
+            "চাই": "want",
+            "পারি": "can",
+            "জানি": "know",
+            "বুঝি": "understand",
+            "বলি": "say",
+            "শুনি": "hear/listen",
+            "দেখি": "see",
+            "যাই": "go",
+            "আসি": "come",
+            "খাই": "eat",
+            "পড়ি": "read/study",
+            "লিখি": "write",
+            "কাজ": "work",
+            "সময়": "time",
+            "দিন": "day",
+            "রাত": "night",
+            "সকাল": "morning",
+            "বিকাল": "afternoon",
+            "সন্ধ্যা": "evening",
+            "ভাষা": "language",
+            "বাংলা": "Bengali/Bangla",
+            "ইংরেজি": "English"
+          }
+          EOF
+
+      - name: Write Swift source files (Fully Offline)
         run: |
           cat <<'EOF' > BanglaTranslator/Sources/BanglaTranslatorApp.swift
           import SwiftUI
@@ -35,37 +118,39 @@ jobs:
           cat <<'EOF' > BanglaTranslator/Sources/AvroParser.swift
           import Foundation
 
+          /// Classic Avro-style phonetic → Bangla converter (100% offline)
           struct AvroParser {
               private static let rules: [(String, String)] = {
                   let raw: [(String, String)] = [
+                      // Multi-char first (longest match)
                       ("bb", "্ব"), ("cc", "্চ"), ("dd", "্ড"),
                       ("gg", "গ্গ"), ("jh", "ঝ"), ("ng", "ং"),
                       ("nn", "ন্ন"), ("rr", "র্র"), ("ss", "স্স"),
                       ("tt", "ট্ট"), ("kh", "খ"), ("bh", "ভ"),
                       ("ch", "ছ"), ("dh", "ধ"), ("gh", "ঘ"),
-                      ("jh", "ঝ"), ("ph", "ফ"), ("th", "থ"),
-                      ("sh", "শ"), ("Sh", "ষ"), ("rh", "ঢ়"),
-                      ("ng", "ং"), ("ny", "ঞ"), ("Ng", "ঙ"),
+                      ("ph", "ফ"), ("th", "থ"), ("sh", "শ"),
+                      ("Sh", "ষ"), ("rh", "ঢ়"), ("ny", "ঞ"),
+                      ("Ng", "ঙ"),
+                      // Vowels
                       ("a", "া"), ("A", "আ"), ("i", "ি"),
                       ("I", "ী"), ("u", "ু"), ("U", "ূ"),
                       ("e", "ে"), ("E", "ৈ"), ("o", "ো"),
-                      ("O", "ৌ"), ("k", "ক"), ("K", "ক"),
-                      ("g", "গ"), ("G", "গ"), ("c", "চ"),
-                      ("C", "চ"), ("j", "জ"), ("J", "জ"),
-                      ("t", "ত"), ("T", "ট"), ("d", "দ"),
-                      ("D", "ড"), ("n", "ন"), ("N", "ণ"),
-                      ("p", "প"), ("P", "প"), ("f", "ফ"),
-                      ("F", "ফ"), ("b", "ব"), ("B", "ব"),
-                      ("v", "ভ"), ("m", "ম"), ("M", "ম"),
-                      ("r", "র"), ("R", "ড়"), ("l", "ল"),
-                      ("L", "ল"), ("s", "স"), ("S", "স"),
-                      ("h", "হ"), ("H", "হ"), ("y", "য"),
+                      ("O", "ৌ"),
+                      // Consonants
+                      ("k", "ক"), ("K", "ক"), ("g", "গ"), ("G", "গ"),
+                      ("c", "চ"), ("C", "চ"), ("j", "জ"), ("J", "জ"),
+                      ("t", "ত"), ("T", "ট"), ("d", "দ"), ("D", "ড"),
+                      ("n", "ন"), ("N", "ণ"), ("p", "প"), ("P", "প"),
+                      ("f", "ফ"), ("F", "ফ"), ("b", "ব"), ("B", "ব"),
+                      ("v", "ভ"), ("m", "ম"), ("M", "ম"), ("r", "র"),
+                      ("R", "ড়"), ("l", "ল"), ("L", "ল"), ("s", "স"),
+                      ("S", "স"), ("h", "হ"), ("H", "হ"), ("y", "য"),
                       ("Y", "য়"), ("w", "ও"), ("x", "ক্স"),
                       ("z", "জ"), ("Z", "জ"), ("q", "ক"),
-                      ("0", "০"), ("1", "১"), ("2", "২"),
-                      ("3", "৩"), ("4", "৪"), ("5", "৫"),
-                      ("6", "৬"), ("7", "৭"), ("8", "৮"),
-                      ("9", "৯"),
+                      // Numbers
+                      ("0", "০"), ("1", "১"), ("2", "২"), ("3", "৩"),
+                      ("4", "৪"), ("5", "৫"), ("6", "৬"), ("7", "৭"),
+                      ("8", "৮"), ("9", "৯"),
                       (".", "।"), (",", ",")
                   ]
                   return raw.sorted { $0.0.count > $1.0.count }
@@ -93,69 +178,72 @@ jobs:
           }
           EOF
 
-          cat <<'EOF' > BanglaTranslator/Sources/TranslationService.swift
+          cat <<'EOF' > BanglaTranslator/Sources/OfflineTranslator.swift
           import Foundation
 
-          class TranslationService: ObservableObject {
-              
-              // 100% Offline Translation, Grammar Correction & Tone Engine
-              func translateOffline(banglaText: String, tone: String) async -> String {
-                  // Simulate on-device micro-processing delay for UI responsiveness
-                  try? await Task.sleep(nanoseconds: 300_000_000)
-                  
-                  let trimmed = banglaText.trimmingCharacters(in: .whitespacesAndNewlines)
-                  if trimmed.isEmpty { return "" }
-                  
-                  // Local dictionary and grammar processing
-                  let baseTranslation = performLocalTranslation(banglaText: trimmed)
-                  
-                  // Apply specific tone and corporate/formal grammar styling
-                  let styledOutput = applyToneAndGrammar(text: baseTranslation, tone: tone)
-                  
-                  return styledOutput
+          /// Fully offline word-by-word + basic sentence translator
+          class OfflineTranslator: ObservableObject {
+              private var dictionary: [String: String] = [:]
+
+              init() {
+                  loadDictionary()
               }
-              
-              private func performLocalTranslation(banglaText: String) -> String {
-                  // Basic offline mapping engine & fallbacks
-                  var translated = banglaText
-                  
-                  let commonPhrases: [String: String] = [
-                      "আমি ভালো আছি": "I am doing well",
-                      "কাজটি সম্পন্ন হয়েছে": "The work has been completed",
-                      "আজকের মিটিং": "Today's meeting",
-                      "ধন্যবাদ": "Thank you",
-                      "কেমন আছেন": "How are you",
-                      "স্যার": "Sir",
-                      "অনুমতি": "Permission",
-                      "রিপোর্ট": "Report",
-                      "আপডেট": "Update"
-                  ]
-                  
-                  for (key, val) in commonPhrases {
-                      translated = translated.replacingOccurrences(of: key, with: val)
+
+              private func loadDictionary() {
+                  guard let url = Bundle.main.url(forResource: "dictionary", withExtension: "json"),
+                        let data = try? Data(contentsOf: url),
+                        let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
+                      // Fallback hard-coded if resource missing
+                      dictionary = [
+                          "আমি": "I", "তুমি": "you", "সে": "he/she",
+                          "ভালো": "good", "ধন্যবাদ": "thank you"
+                      ]
+                      return
                   }
-                  
-                  if translated == banglaText {
-                      // Fallback phonetic/dictionary representation for offline preview
-                      return banglaText
-                  }
-                  
-                  return translated
+                  dictionary = dict
               }
-              
-              private func applyToneAndGrammar(text: String, tone: String) -> String {
+
+              /// Main offline translate function
+              func translate(banglaText: String, tone: String) -> String {
+                  let cleaned = banglaText
+                      .trimmingCharacters(in: .whitespacesAndNewlines)
+                      .replacingOccurrences(of: "।", with: ".")
+                      .replacingOccurrences(of: "  ", with: " ")
+
+                  guard !cleaned.isEmpty else { return "" }
+
+                  // Split into words (simple)
+                  let words = cleaned.components(separatedBy: CharacterSet.whitespacesAndNewlines)
+                      .filter { !$0.isEmpty }
+
+                  var translatedWords: [String] = []
+                  for word in words {
+                      let pure = word.trimmingCharacters(in: .punctuationCharacters)
+                      if let eng = dictionary[pure] {
+                          translatedWords.append(eng)
+                      } else if let eng = dictionary[word] {
+                          translatedWords.append(eng)
+                      } else {
+                          // Keep original Bangla word if not found
+                          translatedWords.append(word)
+                      }
+                  }
+
+                  var result = translatedWords.joined(separator: " ")
+
+                  // Very light tone adjustment (offline)
                   switch tone {
-                  case "boss":
-                      return "Respected Sir,\n\nI would like to respectfully inform you that: \(text).\n\nBest Regards,\nAssistant Engineer"
-                  case "management":
-                      return "Dear Management,\n\nPlease be advised regarding the following project update: \(text).\n\nSincerely,\nEngineering Secretariat"
-                  case "friendly":
-                      return "Hi there! Just wanted to share a quick update: \(text). Hope you have a great day!"
+                  case "management", "boss":
+                      result = "Respected Sir/Madam, " + result.capitalized + "."
                   case "frank":
-                      return "Hey! Frankly speaking, \(text). Let me know what you think!"
+                      result = result + " 😄"
+                  case "friendly":
+                      result = result.capitalized
                   default:
-                      return text
+                      break
                   }
+
+                  return result
               }
           }
           EOF
@@ -166,15 +254,15 @@ jobs:
           struct ContentView: View {
               @State private var inputText = ""
               @State private var outputText = ""
-              @State private var selectedTone = "management"
+              @State private var selectedTone = "friendly"
               @State private var isLoading = false
-              @StateObject private var translationService = TranslationService()
+              @StateObject private var translator = OfflineTranslator()
 
               let tones = [
                   ("friendly", "Friendly"),
-                  ("management", "Mgmt Profile"),
-                  ("boss", "Chairman / Boss"),
-                  ("frank", "Frank / Casual")
+                  ("management", "High Profile Mgmt"),
+                  ("boss", "Big Boss / Chairman"),
+                  ("frank", "Jokingly / Frank")
               ]
 
               var banglaText: String {
@@ -184,21 +272,22 @@ jobs:
               var body: some View {
                   NavigationView {
                       VStack(spacing: 16) {
+                          // Input
                           VStack(alignment: .leading, spacing: 6) {
-                              Text("আপনার বাংলা / অভ্র ইনপুট (Offline)")
+                              Text("আপনার বাংলা / অভ্র ইনপুট")
                                   .font(.headline)
                               TextEditor(text: $inputText)
-                                  .frame(minHeight: 100)
-                                  .padding(4)
+                                  .frame(minHeight: 110)
                                   .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5)))
-                              
                               Text("Converted Bangla: \(banglaText)")
                                   .font(.caption)
                                   .foregroundColor(.secondary)
+                                  .lineLimit(2)
                           }
 
-                          VStack(alignment: .leading, spacing: 6) {
-                              Text("Select Tone / Grammar Style")
+                          // Tone
+                          VStack(alignment: .leading) {
+                              Text("Select Tone")
                                   .font(.headline)
                               Picker("Tone", selection: $selectedTone) {
                                   ForEach(tones, id: \.0) { tone in
@@ -208,32 +297,30 @@ jobs:
                               .pickerStyle(SegmentedPickerStyle())
                           }
 
+                          // Translate button
                           Button(action: translate) {
                               HStack {
-                                  if isLoading {
-                                      ProgressView()
-                                          .padding(.trailing, 5)
-                                  }
-                                  Text(isLoading ? "Processing..." : "Translate & Format Offline")
-                                      .fontWeight(.semibold)
+                                  if isLoading { ProgressView().scaleEffect(0.8) }
+                                  Text("Translate (Offline)")
                               }
                               .frame(maxWidth: .infinity)
-                              .padding(.vertical, 10)
                           }
                           .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                           .buttonStyle(.borderedProminent)
 
+                          // Output
                           VStack(alignment: .leading, spacing: 6) {
-                              Text("Grammatically Correct English")
+                              Text("Translated English (Offline)")
                                   .font(.headline)
                               TextEditor(text: .constant(outputText))
-                                  .frame(minHeight: 120)
-                                  .padding(4)
+                                  .frame(minHeight: 110)
                                   .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5)))
                                   .disabled(true)
                           }
-                          
-                          Spacer()
+
+                          Text("🔒 100% Offline • No API • Dictionary based")
+                              .font(.caption2)
+                              .foregroundColor(.secondary)
                       }
                       .padding()
                       .navigationTitle("Bangla Translator")
@@ -243,15 +330,14 @@ jobs:
               private func translate() {
                   isLoading = true
                   outputText = ""
-                  Task {
-                      let result = await translationService.translateOffline(
+                  // Tiny delay just for UI feedback
+                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                      let result = translator.translate(
                           banglaText: banglaText,
                           tone: selectedTone
                       )
-                      await MainActor.run {
-                          outputText = result
-                          isLoading = false
-                      }
+                      outputText = result
+                      isLoading = false
                   }
               }
           }
@@ -261,7 +347,7 @@ jobs:
         run: |
           cat <<'EOF' > BanglaTranslator/Resources/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.plist">
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
           	<key>CFBundleDevelopmentRegion</key>
@@ -306,7 +392,7 @@ jobs:
           options:
             bundleIdPrefix: com.example
             deploymentTarget:
-              iOS: "17.0"
+              iOS: "16.0"
           settings:
             base:
               CODE_SIGN_STYLE: Manual
@@ -337,7 +423,7 @@ jobs:
         working-directory: BanglaTranslator
         run: xcodegen generate
 
-      - name: Archive Project
+      - name: Archive Project (Unsigned)
         run: |
           cd BanglaTranslator
           xcodebuild archive \
@@ -348,9 +434,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            -destination 'generic/platform/iOS'
+            -destination 'generic/platform=iOS'
 
-      - name: Package Unsigned IPA manually
+      - name: Package Unsigned IPA
         run: |
           mkdir -p output/ipa/Payload
           cp -R output/BanglaTranslator.xcarchive/Products/Applications/BanglaTranslator.app output/ipa/Payload/
@@ -360,5 +446,5 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BanglaTranslator.ipa
+          name: BanglaTranslator-Offline.ipa
           path: output/ipa/BanglaTranslator.ipa
