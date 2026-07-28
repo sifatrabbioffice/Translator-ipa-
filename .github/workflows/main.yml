@@ -1,7 +1,7 @@
-name: Build Unsigned IPA
+name: Build Unsigned IPA with XcodeGen
 
 on:
-  workflow_dispatch:   # ম্যানুয়ালি ট্রিগার
+  workflow_dispatch:
   push:
     branches: [ main ]
 
@@ -12,17 +12,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
-
-      - name: Create project structure
+      # --- Project structure ---
+      - name: Create project directory and Swift files
         run: |
-          mkdir -p BanglaTranslator/BanglaTranslator
-          mkdir -p BanglaTranslator/BanglaTranslator.xcodeproj
+          mkdir -p BanglaTranslator/Sources
+          mkdir -p BanglaTranslator/Resources
 
-      - name: Create Swift files
+      - name: Write Swift source files
         run: |
-          cat <<'EOF' > BanglaTranslator/BanglaTranslator/BanglaTranslatorApp.swift
+          cat <<'EOF' > BanglaTranslator/Sources/BanglaTranslatorApp.swift
           import SwiftUI
 
           @main
@@ -35,13 +33,11 @@ jobs:
           }
           EOF
 
-          cat <<'EOF' > BanglaTranslator/BanglaTranslator/AvroParser.swift
+          cat <<'EOF' > BanglaTranslator/Sources/AvroParser.swift
           import Foundation
 
           struct AvroParser {
-              // সরলীকৃত অভ্র ফোনেটিক রুল সেট (সাধারণ ক্যারেক্টার কভার করে)
               private static let rules: [(String, String)] = {
-                  // দীর্ঘ প্যাটার্ন আগে
                   let raw: [(String, String)] = [
                       ("bb", "্ব"), ("cc", "্চ"), ("dd", "্ড"),
                       ("gg", "গ্গ"), ("jh", "ঝ"), ("ng", "ং"),
@@ -51,7 +47,6 @@ jobs:
                       ("jh", "ঝ"), ("ph", "ফ"), ("th", "থ"),
                       ("sh", "শ"), ("Sh", "ষ"), ("rh", "ঢ়"),
                       ("ng", "ং"), ("ny", "ঞ"), ("Ng", "ঙ"),
-                      ("kk", "ক্ক"), ("gg", "গ্গ"),
                       ("a", "া"), ("A", "আ"), ("i", "ি"),
                       ("I", "ী"), ("u", "ু"), ("U", "ূ"),
                       ("e", "ে"), ("E", "ৈ"), ("o", "ো"),
@@ -72,19 +67,14 @@ jobs:
                       ("3", "৩"), ("4", "৪"), ("5", "৫"),
                       ("6", "৬"), ("7", "৭"), ("8", "৮"),
                       ("9", "৯"),
-                      (".", "।"), (",", ","),
-                      // হসন্ত ও অন্যান্য
-                      ("o", "ো"), ("oi", "ৈ"), ("ou", "ৌ"),
-                      ("O", "ৌ"), ("E", "ৈ"),
+                      (".", "।"), (",", ",")
                   ]
-                  // লম্বা প্যাটার্ন আগে রাখতে সর্ট করি
                   return raw.sorted { $0.0.count > $1.0.count }
               }()
 
               static func parse(_ input: String) -> String {
                   var remaining = input
                   var output = ""
-
                   while !remaining.isEmpty {
                       var matched = false
                       for (pattern, replacement) in rules {
@@ -96,7 +86,6 @@ jobs:
                           }
                       }
                       if !matched {
-                          // কোনো রুল না মিললে ক্যারেক্টারটি যেমন আছে রেখে দাও
                           output.append(remaining.removeFirst())
                       }
                   }
@@ -105,7 +94,7 @@ jobs:
           }
           EOF
 
-          cat <<'EOF' > BanglaTranslator/BanglaTranslator/TranslationService.swift
+          cat <<'EOF' > BanglaTranslator/Sources/TranslationService.swift
           import Foundation
 
           class TranslationService: ObservableObject {
@@ -157,7 +146,7 @@ jobs:
           }
           EOF
 
-          cat <<'EOF' > BanglaTranslator/BanglaTranslator/SettingsView.swift
+          cat <<'EOF' > BanglaTranslator/Sources/SettingsView.swift
           import SwiftUI
 
           struct SettingsView: View {
@@ -183,7 +172,7 @@ jobs:
           }
           EOF
 
-          cat <<'EOF' > BanglaTranslator/BanglaTranslator/ContentView.swift
+          cat <<'EOF' > BanglaTranslator/Sources/ContentView.swift
           import SwiftUI
 
           struct ContentView: View {
@@ -209,7 +198,6 @@ jobs:
               var body: some View {
                   NavigationView {
                       VStack(spacing: 16) {
-                          // ইনপুট বক্স
                           VStack(alignment: .leading) {
                               Text("আপনার বাংলা / অভ্র ইনপুট")
                                   .font(.headline)
@@ -221,7 +209,6 @@ jobs:
                                   .foregroundColor(.secondary)
                           }
 
-                          // টোন সিলেক্টর
                           VStack(alignment: .leading) {
                               Text("Select Tone")
                                   .font(.headline)
@@ -233,7 +220,6 @@ jobs:
                               .pickerStyle(SegmentedPickerStyle())
                           }
 
-                          // ট্রান্সলেট বাটন
                           Button(action: translate) {
                               HStack {
                                   if isLoading {
@@ -245,7 +231,6 @@ jobs:
                           .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.isEmpty || isLoading)
                           .buttonStyle(.borderedProminent)
 
-                          // আউটপুট
                           VStack(alignment: .leading) {
                               Text("Translated English")
                                   .font(.headline)
@@ -297,168 +282,9 @@ jobs:
           }
           EOF
 
-      - name: Create Xcode project file
+      - name: Write Info.plist
         run: |
-          cat <<'EOF' > BanglaTranslator/BanglaTranslator.xcodeproj/project.pbxproj
-          // !$*UTF8*$!
-          {
-          	archiveVersion = 1;
-          	classes = {
-          	};
-          	objectVersion = 56;
-          	objects = {
-
-          /* Begin PBXBuildFile section */
-          		A1B2C3D401 /* BanglaTranslatorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D402; };
-          		A1B2C3D403 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D404; };
-          		A1B2C3D405 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D406; };
-          		A1B2C3D407 /* AvroParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D408; };
-          		A1B2C3D409 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40A; };
-          /* End PBXBuildFile section */
-
-          /* Begin PBXFileReference section */
-          		A1B2C3D402 /* BanglaTranslatorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BanglaTranslatorApp.swift; sourceTree = "<group>"; };
-          		A1B2C3D404 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-          		A1B2C3D406 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-          		A1B2C3D408 /* AvroParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvroParser.swift; sourceTree = "<group>"; };
-          		A1B2C3D40A /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationService.swift; sourceTree = "<group>"; };
-          		A1B2C3D40B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-          /* End PBXFileReference section */
-
-          /* Begin PBXGroup section */
-          		A1B2C3D40C = {
-          			isa = PBXGroup;
-          			children = (
-          				A1B2C3D402,
-          				A1B2C3D404,
-          				A1B2C3D406,
-          				A1B2C3D408,
-          				A1B2C3D40A,
-          				A1B2C3D40B,
-          			);
-          			sourceTree = "<group>";
-          		};
-          /* End PBXGroup section */
-
-          /* Begin PBXNativeTarget section */
-          		A1B2C3D40D /* BanglaTranslator */ = {
-          			isa = PBXNativeTarget;
-          			buildConfigurationList = A1B2C3D40E;
-          			buildPhases = (
-          				A1B2C3D40F /* Sources */,
-          			);
-          			buildRules = (
-          			);
-          			dependencies = (
-          			);
-          			name = BanglaTranslator;
-          			productName = BanglaTranslator;
-          			productReference = A1B2C3D410 /* BanglaTranslator.app */;
-          			productType = "com.apple.product-type.application";
-          		};
-          /* End PBXNativeTarget section */
-
-          /* Begin PBXProject section */
-          		A1B2C3D411 /* Project object */ = {
-          			isa = PBXProject;
-          			attributes = {
-          				BuildIndependentTargetsInParallel = 1;
-          				LastSwiftUpdateCheck = 1540;
-          				LastUpgradeCheck = 1540;
-          			};
-          			buildConfigurationList = A1B2C3D412;
-          			compatibilityVersion = "Xcode 14.0";
-          			developmentRegion = en;
-          			hasScannedForEncodings = 0;
-          			knownRegions = (
-          				en,
-          				Base,
-          			);
-          			mainGroup = A1B2C3D40C;
-          			productRefGroup = A1B2C3D40C;
-          			projectDirPath = "";
-          			projectRoot = "";
-          			targets = (
-          				A1B2C3D40D,
-          			);
-          		};
-          /* End PBXProject section */
-
-          /* Begin PBXSourcesBuildPhase section */
-          		A1B2C3D40F /* Sources */ = {
-          			isa = PBXSourcesBuildPhase;
-          			buildActionMask = 2147483647;
-          			files = (
-          				A1B2C3D401,
-          				A1B2C3D403,
-          				A1B2C3D405,
-          				A1B2C3D407,
-          				A1B2C3D409,
-          			);
-          			runOnlyForDeploymentPostprocessing = 0;
-          		};
-          /* End PBXSourcesBuildPhase section */
-
-          /* Begin XCBuildConfiguration section */
-          		A1B2C3D413 /* Debug */ = {
-          			isa = XCBuildConfiguration;
-          			buildSettings = {
-          				CODE_SIGN_STYLE = Manual;
-          				CODE_SIGNING_ALLOWED = NO;
-          				CODE_SIGNING_REQUIRED = NO;
-          				CODE_SIGN_IDENTITY = "";
-          				PROVISIONING_PROFILE_SPECIFIER = "";
-          				DEVELOPMENT_TEAM = "";
-          				PRODUCT_NAME = "$(TARGET_NAME)";
-          				SWIFT_VERSION = 5.0;
-          				TARGETED_DEVICE_FAMILY = "1,2";
-          				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-          				INFOPLIST_FILE = Info.plist;
-          			};
-          			name = Debug;
-          		};
-          		A1B2C3D414 /* Release */ = {
-          			isa = XCBuildConfiguration;
-          			buildSettings = {
-          				CODE_SIGN_STYLE = Manual;
-          				CODE_SIGNING_ALLOWED = NO;
-          				CODE_SIGNING_REQUIRED = NO;
-          				CODE_SIGN_IDENTITY = "";
-          				PROVISIONING_PROFILE_SPECIFIER = "";
-          				DEVELOPMENT_TEAM = "";
-          				PRODUCT_NAME = "$(TARGET_NAME)";
-          				SWIFT_VERSION = 5.0;
-          				TARGETED_DEVICE_FAMILY = "1,2";
-          				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-          				INFOPLIST_FILE = Info.plist;
-          			};
-          			name = Release;
-          		};
-          		A1B2C3D40E /* Build configuration list for PBXNativeTarget "BanglaTranslator" */ = {
-          			isa = XCConfigurationList;
-          			buildConfigurations = (
-          				A1B2C3D413,
-          				A1B2C3D414,
-          			);
-          			defaultConfigurationIsVisible = 0;
-          			defaultConfigurationName = Release;
-          		};
-          		A1B2C3D412 /* Build configuration list for PBXProject "BanglaTranslator" */ = {
-          			isa = XCConfigurationList;
-          			buildConfigurations = (
-          				A1B2C3D413,
-          				A1B2C3D414,
-          			);
-          			defaultConfigurationIsVisible = 0;
-          			defaultConfigurationName = Release;
-          		};
-          /* End XCBuildConfiguration section */
-          };
-          EOF
-
-      - name: Create Info.plist
-        run: |
-          cat <<'EOF' > BanglaTranslator/BanglaTranslator/Info.plist
+          cat <<'EOF' > BanglaTranslator/Resources/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -498,9 +324,48 @@ jobs:
           </plist>
           EOF
 
+      - name: Create project.yml for XcodeGen
+        run: |
+          cat <<'EOF' > BanglaTranslator/project.yml
+          name: BanglaTranslator
+          options:
+            bundleIdPrefix: com.example
+            deploymentTarget:
+              iOS: "16.0"
+          settings:
+            base:
+              CODE_SIGN_STYLE: Manual
+              CODE_SIGNING_ALLOWED: NO
+              CODE_SIGNING_REQUIRED: NO
+              CODE_SIGN_IDENTITY: ""
+              PROVISIONING_PROFILE_SPECIFIER: ""
+              DEVELOPMENT_TEAM: ""
+          targets:
+            BanglaTranslator:
+              type: application
+              platform: iOS
+              sources:
+                - path: Sources
+              resources:
+                - path: Resources
+              settings:
+                base:
+                  INFOPLIST_FILE: Resources/Info.plist
+                  PRODUCT_BUNDLE_IDENTIFIER: com.example.banglatranslator
+                  SWIFT_VERSION: "5.0"
+                  TARGETED_DEVICE_FAMILY: "1,2"
+          EOF
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: BanglaTranslator
+        run: xcodegen generate
+
       - name: Create ExportOptions.plist
         run: |
-          cat <<EOF > ExportOptions.plist
+          cat <<'EOF' > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -517,7 +382,7 @@ jobs:
           </plist>
           EOF
 
-      - name: Archive & Export IPA
+      - name: Archive and Export IPA
         run: |
           cd BanglaTranslator
           xcodebuild archive \
@@ -528,8 +393,6 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            DEVELOPMENT_TEAM="" \
             -destination 'generic/platform=iOS'
 
           xcodebuild -exportArchive \
